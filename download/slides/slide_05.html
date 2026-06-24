@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>IoT + AI Monitoring — Dhvani</title>
+<link rel="stylesheet" href="global.css">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Poppins:wght@600;700;800;900&display=swap');
+  body { margin:0; padding:0; background:#0F0F0F; overflow:hidden; }
+  .slide-canvas { width:1280px; height:720px; overflow:hidden; position:relative; background:#0F0F0F; color:#FFFFFF; font-family:'Inter',sans-serif; box-sizing:border-box; }
+  .font-heading { font-family:'Poppins',sans-serif; }
+  .tricolour-bar { position:absolute; top:0; left:0; right:0; height:6px; display:flex; z-index:10; }
+  .tricolour-bar div:nth-child(1) { flex:1; background:#FF9933; }
+  .tricolour-bar div:nth-child(2) { flex:1; background:#FFFFFF; }
+  .tricolour-bar div:nth-child(3) { flex:1; background:#138808; }
+  .sensor-item { display:flex; align-items:center; gap:16px; padding:13px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+  .sensor-item:last-child { border-bottom:none; }
+  .sensor-icon { width:42px; height:42px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .pipeline-step { display:flex; gap:18px; align-items:flex-start; position:relative; }
+  .pipeline-step::after { content:''; position:absolute; left:19px; top:48px; width:2px; height:24px; background:rgba(255,153,51,0.25); }
+  .pipeline-step:last-child::after { display:none; }
+  .step-number { width:40px; height:40px; border-radius:50%; background:#FF9933; color:#0F0F0F; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; flex-shrink:0; font-family:'Poppins',sans-serif; }
+  .comm-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:8px; font-size:13px; font-weight:600; white-space:nowrap; }
+  .comm-arrow { color:#9CA3AF; font-size:16px; }
+</style>
+</head>
+<body>
+<div class="slide-canvas">
+  <!-- Tricolour bar -->
+  <div class="tricolour-bar"><div></div><div></div><div></div></div>
+
+  <!-- Content -->
+  <div style="padding:72px 72px 48px 72px;">
+    <!-- Title -->
+    <h1 class="font-heading" style="font-weight:800; font-size:34px; margin-bottom:32px; line-height:1.2;">
+      Smart Monitoring: Detect Damage in <span style="color:#FF9933;">&lt;3 Seconds</span>
+    </h1>
+
+    <!-- Two-column layout -->
+    <div style="display:flex; gap:48px;">
+      <!-- LEFT: Sensor List -->
+      <div style="flex:1;">
+        <div class="font-heading" style="font-weight:700; font-size:18px; margin-bottom:16px; color:#9CA3AF; text-transform:uppercase; letter-spacing:1px;">5 Sensors Per Mast</div>
+
+        <div style="background:#1A1A1A; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:8px 24px; margin-bottom:24px;">
+          <!-- Accelerometer -->
+          <div class="sensor-item">
+            <div class="sensor-icon" style="background:rgba(255,153,51,0.12);">
+              <i class="material-icons" style="color:#FF9933; font-size:22px;">vibration</i>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:16px;">Accelerometer</div>
+              <div style="font-size:13px; color:#9CA3AF;">Vibration patterns</div>
+            </div>
+          </div>
+          <!-- Strain Gauge -->
+          <div class="sensor-item">
+            <div class="sensor-icon" style="background:rgba(19,136,8,0.12);">
+              <i class="material-icons" style="color:#138808; font-size:22px;">speed</i>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:16px;">Strain Gauge</div>
+              <div style="font-size:13px; color:#9CA3AF;">Fabric tension</div>
+            </div>
+          </div>
+          <!-- Wind Speed -->
+          <div class="sensor-item">
+            <div class="sensor-icon" style="background:rgba(255,153,51,0.12);">
+              <i class="material-icons" style="color:#FF9933; font-size:22px;">air</i>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:16px;">Wind Speed</div>
+              <div style="font-size:13px; color:#9CA3AF;">Auto-retract &gt;80 km/h</div>
+            </div>
+          </div>
+          <!-- Humidity -->
+          <div class="sensor-item">
+            <div class="sensor-icon" style="background:rgba(19,136,8,0.12);">
+              <i class="material-icons" style="color:#138808; font-size:22px;">water_drop</i>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:16px;">Humidity</div>
+              <div style="font-size:13px; color:#9CA3AF;">Moisture absorption</div>
+            </div>
+          </div>
+          <!-- Camera AI-CV -->
+          <div class="sensor-item">
+            <div class="sensor-icon" style="background:rgba(255,153,51,0.12);">
+              <i class="material-icons" style="color:#FF9933; font-size:22px;">videocam</i>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:16px;">Camera AI-CV</div>
+              <div style="font-size:13px; color:#9CA3AF;">YOLOv8 tear detection</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Communication Stack -->
+        <div class="font-heading" style="font-weight:700; font-size:14px; margin-bottom:12px; color:#9CA3AF; text-transform:uppercase; letter-spacing:1px;">Communication Stack</div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="comm-badge"><i class="material-icons" style="font-size:15px; color:#FF9933;">wifi</i> LoRaWAN 868MHz</span>
+          <i class="material-icons comm-arrow">arrow_forward</i>
+          <span class="comm-badge"><i class="material-icons" style="font-size:15px; color:#138808;">4g_mobiledata</i> 4G LTE</span>
+          <i class="material-icons comm-arrow">arrow_forward</i>
+          <span class="comm-badge"><i class="material-icons" style="font-size:15px; color:#FF9933;">memory</i> Edge TPU AI</span>
+          <i class="material-icons comm-arrow">arrow_forward</i>
+          <span class="comm-badge" style="background:rgba(255,153,51,0.15); border-color:rgba(255,153,51,0.3); color:#FF9933;"><i class="material-icons" style="font-size:15px;">bolt</i> &lt;3s Alert</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: AI Pipeline -->
+      <div style="flex:1;">
+        <div class="font-heading" style="font-weight:700; font-size:18px; margin-bottom:16px; color:#9CA3AF; text-transform:uppercase; letter-spacing:1px;">4-Step AI Pipeline</div>
+
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <!-- Step 1: CAPTURE -->
+          <div class="pipeline-step">
+            <div class="step-number">1</div>
+            <div style="background:#1A1A1A; border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:20px 24px; flex:1; border-left:3px solid #FF9933;">
+              <div class="font-heading" style="font-weight:800; font-size:18px; color:#FF9933; margin-bottom:6px;">CAPTURE</div>
+              <div style="font-size:15px; color:#D1D5DB; line-height:1.5;">360° camera every 30 seconds</div>
+            </div>
+          </div>
+
+          <!-- Step 2: DETECT -->
+          <div class="pipeline-step">
+            <div class="step-number">2</div>
+            <div style="background:#1A1A1A; border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:20px 24px; flex:1; border-left:3px solid #FF9933;">
+              <div class="font-heading" style="font-weight:800; font-size:18px; color:#FF9933; margin-bottom:6px;">DETECT</div>
+              <div style="font-size:15px; color:#D1D5DB; line-height:1.5;">YOLOv8 on Edge TPU, <span style="color:#138808; font-weight:700;">94% mAP</span></div>
+            </div>
+          </div>
+
+          <!-- Step 3: CLASSIFY -->
+          <div class="pipeline-step">
+            <div class="step-number" style="background:#138808;">3</div>
+            <div style="background:#1A1A1A; border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:20px 24px; flex:1; border-left:3px solid #138808;">
+              <div class="font-heading" style="font-weight:800; font-size:18px; color:#138808; margin-bottom:6px;">CLASSIFY</div>
+              <div style="font-size:15px; color:#D1D5DB; line-height:1.5;">Minor / Major / Critical severity</div>
+            </div>
+          </div>
+
+          <!-- Step 4: ALERT -->
+          <div class="pipeline-step">
+            <div class="step-number" style="background:#138808;">4</div>
+            <div style="background:#1A1A1A; border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:20px 24px; flex:1; border-left:3px solid #138808;">
+              <div class="font-heading" style="font-weight:800; font-size:18px; color:#138808; margin-bottom:6px;">ALERT</div>
+              <div style="font-size:15px; color:#D1D5DB; line-height:1.5;">Push to Command Center + auto work order</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Speaker Notes -->
+<aside data-notes class="hidden">Every flag mast gets 5 sensors — accelerometer, strain gauge, wind speed, humidity, and a 360-degree camera with AI. The camera runs YOLOv8 on a Google Edge TPU. It captures every 30 seconds, detects tears with 94 percent accuracy, classifies severity, and pushes an alert to the command center in under 3 seconds. No more waiting for someone to physically visit the site.</aside>
+</body>
+</html>
