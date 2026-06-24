@@ -3,13 +3,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import {
   Flag, AlertTriangle, Activity, Shield, Recycle, IndianRupee,
   Wind, Droplets, Eye, ThermometerSun, Cpu, Wifi, WifiOff,
   CheckCircle2, XCircle, Clock, MapPin, Zap, TrendingDown,
   BarChart3, Layers, Leaf, ChevronRight, Bell, Search,
   ArrowUpRight, ArrowDownRight, AlertCircle, Gauge, Radio,
-  ScanLine, Microscope, CircleDot
+  ScanLine, Microscope, CircleDot, Map, Calendar, Rocket,
+  Wrench, FileCheck, ExternalLink
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -19,6 +21,9 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import FlagDetailDialog from '@/components/FlagDetailDialog';
+
+const DelhiMap = dynamic(() => import('@/components/DelhiMap'), { ssr: false });
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, RadarChart,
@@ -158,6 +163,8 @@ export default function Home() {
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([]);
   const [wsConnected, setWsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const [selectedFlagId, setSelectedFlagId] = useState<string | null>(null);
+  const [mapFlags, setMapFlags] = useState<Array<{ id: string; flagId: string; location: string; latitude: number; longitude: number; zone: string; status: string; healthScore: number; fabricType: string }>>([]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -172,6 +179,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  // Fetch flags for map
+  useEffect(() => {
+    fetch('/api/flags?limit=100')
+      .then(res => res.json())
+      .then(data => setMapFlags(data.flags || []))
+      .catch(console.error);
+  }, []);
 
   // Auto-refresh every 30s
   useEffect(() => {
@@ -276,21 +291,27 @@ export default function Home() {
       {/* ─── Main Content ─── */}
       <main className="max-w-[1600px] mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto gap-1 bg-white/60 backdrop-blur p-1 rounded-xl border">
-            <TabsTrigger value="dashboard" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
-              <Gauge className="w-4 h-4" /> Dashboard
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 h-auto gap-1 bg-white/60 backdrop-blur p-1 rounded-xl border">
+            <TabsTrigger value="dashboard" className="flex items-center gap-1.5 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+              <Gauge className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Dashboard</span>
             </TabsTrigger>
-            <TabsTrigger value="iot" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
-              <Cpu className="w-4 h-4" /> IoT Monitor
+            <TabsTrigger value="map" className="flex items-center gap-1.5 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+              <Map className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Map</span>
             </TabsTrigger>
-            <TabsTrigger value="materials" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
-              <Microscope className="w-4 h-4" /> Materials Lab
+            <TabsTrigger value="iot" className="flex items-center gap-1.5 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+              <Cpu className="w-3.5 h-3.5" /> <span className="hidden sm:inline">IoT</span>
             </TabsTrigger>
-            <TabsTrigger value="lifecycle" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
-              <Recycle className="w-4 h-4" /> Lifecycle
+            <TabsTrigger value="materials" className="flex items-center gap-1.5 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+              <Microscope className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Materials</span>
             </TabsTrigger>
-            <TabsTrigger value="cost" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
-              <IndianRupee className="w-4 h-4" /> Cost & ROI
+            <TabsTrigger value="lifecycle" className="flex items-center gap-1.5 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+              <Recycle className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Lifecycle</span>
+            </TabsTrigger>
+            <TabsTrigger value="cost" className="flex items-center gap-1.5 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+              <IndianRupee className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Cost</span>
+            </TabsTrigger>
+            <TabsTrigger value="roadmap" className="flex items-center gap-1.5 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+              <Rocket className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Roadmap</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1062,7 +1083,273 @@ export default function Home() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ════════════════════════════════════════════════════════════ */}
+          {/* TAB: DELHI MAP                                               */}
+          {/* ════════════════════════════════════════════════════════════ */}
+          <TabsContent value="map" className="space-y-6">
+            <Card className="border-0 shadow-md">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Map className="w-5 h-5" style={{ color: SAFFRON }} />
+                  Delhi NCT — Flag Location Map
+                </CardTitle>
+                <CardDescription>Click on any flag marker to view detailed sensor data, health score, and alerts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DelhiMap
+                  flags={mapFlags}
+                  onFlagClick={(flag) => setSelectedFlagId(flag.id)}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Flag Grid below map */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {data.flagsByZone.map((zone, i) => (
+                <motion.div
+                  key={zone.zone}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${ZONE_COLORS[zone.zone] || SAFFRON}15` }}>
+                            <MapPin className="w-4 h-4" style={{ color: ZONE_COLORS[zone.zone] || SAFFRON }} />
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold">{zone.zone} Zone</div>
+                            <div className="text-[10px] text-gray-400">{zone.count} flags</div>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-[10px]" style={{ borderColor: ZONE_COLORS[zone.zone] || SAFFRON, color: ZONE_COLORS[zone.zone] || SAFFRON }}>
+                          {zone.count} flags
+                        </Badge>
+                      </div>
+                      <Progress value={(zone.count / flags.total) * 100} className="h-1.5" />
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* ════════════════════════════════════════════════════════════ */}
+          {/* TAB: SOLUTION ROADMAP                                         */}
+          {/* ════════════════════════════════════════════════════════════ */}
+          <TabsContent value="roadmap" className="space-y-6">
+            {/* System Architecture */}
+            <Card className="border-0 shadow-md bg-gradient-to-r from-orange-50 via-white to-green-50">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Rocket className="w-5 h-5" style={{ color: SAFFRON }} />
+                  Dhvani System Architecture — End-to-End Solution
+                </CardTitle>
+                <CardDescription>From IoT sensors at the flag mast to the Central Command dashboard</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                  {[
+                    { title: 'Edge Layer', desc: '5 sensors per mast (Accel, Strain, Humidity, Wind, Camera) + Edge TPU for AI inference. Solar-powered, LoRaWAN connected.', icon: <Cpu className="w-5 h-5" />, color: '#3B82F6' },
+                    { title: 'Gateway Layer', desc: 'LoRaWAN gateways per zone (8 total). Aggregate sensor data, buffer during connectivity loss, forward via 4G/fiber.', icon: <Radio className="w-5 h-5" />, color: '#8B5CF6' },
+                    { title: 'Cloud Platform', desc: 'AWS/Azure IoT Core. Time-series DB for sensor data. YOLOv8 + custom classifier for CV. Alerting engine.', icon: <Layers className="w-5 h-5" />, color: SAFFRON },
+                    { title: 'AI/ML Pipeline', desc: 'Real-time tear detection (94% mAP), dirt opacity scoring, weather prediction, health score ML model. Retrained monthly.', icon: <Eye className="w-5 h-5" />, color: '#EC4899' },
+                    { title: 'Command Center', desc: 'This dashboard. Real-time monitoring, alert management, predictive maintenance, cost optimization, Flag Code compliance.', icon: <Gauge className="w-5 h-5" />, color: GREEN },
+                  ].map((layer, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.12 }}
+                      className="p-4 rounded-xl bg-white/80 border border-gray-100"
+                    >
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: `${layer.color}15`, color: layer.color }}>
+                        {layer.icon}
+                      </div>
+                      <h4 className="font-semibold text-sm mb-1">{layer.title}</h4>
+                      <p className="text-xs text-gray-500">{layer.desc}</p>
+                      {i < 4 && <ChevronRight className="w-4 h-4 text-gray-300 absolute -right-2 top-1/2 hidden md:block" />}
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Implementation Timeline */}
+            <Card className="border-0 shadow-md">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="w-5 h-5" style={{ color: GREEN }} />
+                  Implementation Roadmap — 18 Months to Full Deployment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[
+                    {
+                      phase: 'Phase 1: Pilot & Validation',
+                      months: 'Month 1-3',
+                      status: 'recommended-start',
+                      items: [
+                        'Deploy 25 IoT sensor kits on high-priority flags (India Gate, Rashtrapati Bhavan, Parliament)',
+                        'Install 5 AI-CV cameras with Edge TPU at Central zone pilot sites',
+                        'Set up LoRaWAN gateway infrastructure for Central zone',
+                        'Begin nano-coating trial on 10 flags (NanoCoated Polyester v2)',
+                        'Establish baseline data collection for ML model training',
+                      ],
+                      budget: '₹8.5 Cr',
+                      color: SAFFRON,
+                    },
+                    {
+                      phase: 'Phase 2: Zone Rollout',
+                      months: 'Month 4-8',
+                      status: 'planned',
+                      items: [
+                        'Expand IoT sensors to all 500 flags across 8 zones',
+                        'Install LoRaWAN gateways in remaining 7 zones',
+                        'Deploy AI-CV cameras at 100 high-traffic flag locations',
+                        'Begin Kevlar-Polyester blend fabric deployment for Extreme wind zones',
+                        'Launch Dhvani Command Center dashboard (this software) for live monitoring',
+                        'Train PWD personnel on IoT-assisted inspection protocols',
+                      ],
+                      budget: '₹22 Cr',
+                      color: '#3B82F6',
+                    },
+                    {
+                      phase: 'Phase 3: Full Smart System',
+                      months: 'Month 9-14',
+                      status: 'planned',
+                      items: [
+                        'Complete Kevlar blend fabric upgrade for all 500 flags',
+                        'Deploy auto-retract mechanisms for 150 extreme weather zone flags',
+                        'Integrate IMD weather API for predictive storm alerts',
+                        'Launch predictive maintenance ML model (trained on 6+ months of data)',
+                        'Implement lifecycle management with Flag Code compliance tracking',
+                        'Begin recycling program for retired flags (₹30L/yr revenue)',
+                      ],
+                      budget: '₹15 Cr',
+                      color: GREEN,
+                    },
+                    {
+                      phase: 'Phase 4: Optimization & Scale',
+                      months: 'Month 15-18',
+                      status: 'future',
+                      items: [
+                        'Deploy Graphene-Reinforced Polymer on 50 VIP-location flags (future-proofing)',
+                        'Integrate with Delhi 311 app for citizen flag-damage reporting',
+                        'Scale solution to other state capitals (Mumbai, Chennai, Kolkata)',
+                        'Publish research paper on Smart Flag System methodology',
+                        'Target: ₹61 Cr annual savings confirmed, 86.5% cost reduction achieved',
+                      ],
+                      budget: '₹5 Cr',
+                      color: '#8B5CF6',
+                    },
+                  ].map((phase, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="relative pl-8 border-l-2"
+                      style={{ borderColor: phase.color }}
+                    >
+                      <div className="absolute -left-2.5 top-0 w-5 h-5 rounded-full border-2 border-white shadow-md flex items-center justify-center" style={{ backgroundColor: phase.color }}>
+                        <span className="text-white text-[9px] font-bold">{i + 1}</span>
+                      </div>
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-sm">{phase.phase}</h4>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px]">{phase.months}</Badge>
+                            <Badge className="text-[10px] border-0" style={{ backgroundColor: `${phase.color}20`, color: phase.color }}>{phase.budget}</Badge>
+                          </div>
+                        </div>
+                        <ul className="space-y-1.5">
+                          {phase.items.map((item, j) => (
+                            <li key={j} className="flex items-start gap-2 text-xs text-gray-600">
+                              <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: phase.color }} />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-green-50 to-teal-50 border border-green-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-green-800">Total Investment: ₹43 Cr</div>
+                      <div className="text-xs text-green-600">Expected annual savings: ₹61 Cr/year | Payback: 8.5 months</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-green-700">7.1x ROI</div>
+                      <div className="text-xs text-green-600">5-year return</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Key Innovation Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-0 shadow-md bg-gradient-to-br from-orange-50 to-white">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Microscope className="w-4 h-4" style={{ color: SAFFRON }} />
+                    Material Science
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-xs text-gray-600">
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: SAFFRON }}></span>Kevlar-Polyester blend withstands 150 km/h winds — 4x stronger than current fabric</li>
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: SAFFRON }}></span>TiO2 photocatalytic coating: self-cleaning via UV light, reduces washing by 70%</li>
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: SAFFRON }}></span>Graphene nanoplatelets (future): 18-month lifespan, 2x lighter than polyester</li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-md bg-gradient-to-br from-blue-50 to-white">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Cpu className="w-4 h-4 text-blue-600" />
+                    IoT & AI
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-xs text-gray-600">
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-blue-500"></span>5 sensors per mast: real-time structural health + environmental monitoring</li>
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-blue-500"></span>AI-CV tear detection: YOLOv8 on Edge TPU, 94% confidence, &lt;3s alert latency</li>
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-blue-500"></span>Predictive ML: weather-based degradation forecasting, proactive maintenance scheduling</li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-md bg-gradient-to-br from-green-50 to-white">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Leaf className="w-4 h-4" style={{ color: GREEN }} />
+                    Sustainability
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-xs text-gray-600">
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: GREEN }}></span>100% Flag Code of India compliant: respectful disposal with FCC certification</li>
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: GREEN }}></span>Recycling revenue: ₹30L/yr from commemorative patches, museum pieces, fiber recovery</li>
+                    <li className="flex items-start gap-2"><span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: GREEN }}></span>86.5% cost reduction means ₹61 Cr/year freed for other Delhi development projects</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
         </Tabs>
+
+        {/* Flag Detail Dialog */}
+        <FlagDetailDialog flagId={selectedFlagId} onClose={() => setSelectedFlagId(null)} />
       </main>
 
       {/* ─── Footer ─── */}
