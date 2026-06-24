@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Flag {
+  id              String   @id @default(cuid())
+  flagId          String   @unique // e.g. "DM-001"
+  location        String   // e.g. "India Gate, New Delhi"
+  latitude        Float
+  longitude       Float
+  zone            String   // e.g. "Central", "South", "North"
+  mastHeight      Float    // in meters
+  fabricType      String   @default("Polyester") // Polyester, NanoCoatedPolyester, KevlarBlend
+  nanoCoating     String   @default("None") // None, Hydrophobic, Oleophobic, DualCoat
+  installDate     DateTime @default(now())
+  lastInspection  DateTime?
+  status          String   @default("Active") // Active, Damaged, Retired, UnderRepair
+  healthScore     Float    @default(100) // 0-100
+  windExposure    String   @default("Medium") // Low, Medium, High, Extreme
+  pollutionLevel  String   @default("Medium") // Low, Medium, High, Severe
+  replacementCount Int     @default(0)
+  costPerCycle    Float    @default(520000) // cost per replacement cycle in INR
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sensors      Sensor[]
+  alerts       Alert[]
+  inspections  Inspection[]
+  lifecycle    LifecycleRecord[]
+}
+
+model Sensor {
+  id            String   @id @default(cuid())
+  sensorId      String   @unique // e.g. "SEN-DM001-01"
+  flagId        String
+  sensorType    String   // Accelerometer, StrainGauge, Humidity, WindSpeed, Camera
+  status        String   @default("Online") // Online, Offline, Maintenance
+  batteryLevel  Float    @default(100)
+  lastReading   String?  // JSON string of latest reading
+  lastReadingAt DateTime?
+  firmwareVer   String   @default("1.0.0")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  flagId      String
+  alertType   String   // Tear, Dirt, Wind, SensorOffline, Pollution, Scheduled
+  severity    String   // Critical, High, Medium, Low
+  message     String
+  isResolved  Boolean  @default(false)
+  resolvedAt  DateTime?
+  aiConfidence Float?  // 0-1 for CV-based alerts
+  imageUrl    String?  // For CV-detected issues
+  createdAt   DateTime @default(now())
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+}
+
+model Inspection {
+  id            String   @id @default(cuid())
+  flagId        String
+  inspectorName String
+  type          String   // Routine, Emergency, PreStorm, PostStorm
+  condition     String   // Excellent, Good, Fair, Poor, Critical
+  notes         String?
+  tearCount     Int      @default(0)
+  dirtLevel     String   @default("Clean") // Clean, Light, Moderate, Heavy
+  recommendation String?
+  nextInspection DateTime?
+  createdAt     DateTime @default(now())
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+}
+
+model LifecycleRecord {
+  id              String   @id @default(cuid())
+  flagId          String
+  action          String   // Installed, Washed, Repaired, Retired, Recycled, Ceremony
+  fabricWeight    Float?   // in kg
+  disposalMethod  String?  // RespectfulBurning, Recycling, Museum, Ceremony
+  recycledInto    String?  // e.g. "Commemorative patches", "Museum display"
+  flagCodeCompliant Boolean @default(true)
+  certificateNo   String?
+  notes           String?
+  performedBy     String?
+  createdAt       DateTime @default(now())
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+}
+
+model MaterialType {
+  id              String   @id @default(cuid())
+  name            String   @unique // e.g. "NanoCoated Polyester v2"
+  category        String   // BaseFabric, Coating, Reinforcement
+  tensileStrength Float    // N/m²
+  weight          Float    // g/m²
+  uvResistance    Int      // 1-10
+  waterRepellency Int      // 1-10
+  dustRepellency  Int      // 1-10
+  windRating      String   // Moderate, High, Extreme
+  lifespanMonths  Int      // expected lifespan in months
+  costPerSqMeter  Float    // INR
+  description     String?
+  supplier        String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model CostProjection {
+  id                String   @id @default(cuid())
+  scenario          String   // Current, Optimized, FullSmart
+  annualReplacement Int      // number of replacements per year
+  costPerFlag       Float    // INR per flag per cycle
+  totalFlags        Int      @default(492)
+  annualCost        Float    // total annual cost in INR
+  savingsPercent    Float    @default(0)
+  materialCost      Float    @default(0)
+  iotCost           Float    @default(0)
+  laborCost         Float    @default(0)
+  recyclingRevenue  Float    @default(0)
+  netCost           Float    @default(0)
+  notes             String?
+  createdAt         DateTime @default(now())
+}

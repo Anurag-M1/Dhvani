@@ -1,0 +1,1064 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Flag, AlertTriangle, Activity, Shield, Recycling, IndianRupee,
+     7→  Wind, Droplets, Eye, ThermometerSun, Cpu, Wifi, WifiOff,
+     8→  CheckCircle2, XCircle, Clock, MapPin, Zap, TrendingDown,
+     9→  BarChart3, Layers, Leaf, ChevronRight, Bell, Search,
+    10→  ArrowUpRight, ArrowDownRight, AlertCircle, Gauge, Radio,
+    11→  ScanLine, Microscope, CircleDot
+    12→} from 'lucide-react';
+    13→import {
+    14→  Card, CardContent, CardDescription, CardHeader, CardTitle,
+    15→} from '@/components/ui/card';
+    16→import { Badge } from '@/components/ui/badge';
+    17→import { Button } from '@/components/ui/button';
+    18→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    19→import { Progress } from '@/components/ui/progress';
+    20→import { Separator } from '@/components/ui/separator';
+    21→import {
+    22→  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    23→  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, RadarChart,
+    24→  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
+    25→} from 'recharts';
+    26→
+    27→// ─── Types ───
+    28→interface DashboardData {
+    29→  flags: { total: number; active: number; damaged: number; retired: number };
+    30→  flagsByZone: { zone: string; count: number }[];
+    31→  flagsByFabric: { fabricType: string; count: number }[];
+    32→  flagsByWind: { windExposure: string; count: number }[];
+    33→  flagsByPollution: { pollutionLevel: string; count: number }[];
+    34→  sensors: { total: number; online: number; offline: number };
+    35→  alerts: { total: number; unresolved: number; critical: number };
+    36→  alertsByType: { type: string; count: number }[];
+    37→  alertsBySeverity: { severity: string; count: number }[];
+    38→  avgHealthScore: number;
+    39→  costProjections: CostProjection[];
+    40→  recentAlerts: RecentAlert[];
+    41→  materials: Material[];
+    42→  lifecycle: { total: number; flagCodeCompliant: number };
+    43→  inspections: { total: number };
+    44→}
+    45→
+    46→interface CostProjection {
+    47→  id: string;
+    48→  scenario: string;
+    49→  annualReplacement: number;
+    50→  costPerFlag: number;
+    51→  totalFlags: number;
+    52→  annualCost: number;
+    53→  savingsPercent: number;
+    54→  materialCost: number;
+    55→  iotCost: number;
+    56→  laborCost: number;
+    57→  recyclingRevenue: number;
+    58→  netCost: number;
+    59→  notes: string;
+    60→}
+    61→
+    62→interface RecentAlert {
+    63→  id: string;
+    64→  alertType: string;
+    65→  severity: string;
+    66→  message: string;
+    67→  isResolved: boolean;
+    68→  aiConfidence: number | null;
+    69→  createdAt: string;
+    70→  flag: { flagId: string; location: string; zone: string };
+    71→}
+    72→
+    73→interface Material {
+    74→  id: string;
+    75→  name: string;
+    76→  category: string;
+    77→  tensileStrength: number;
+    78→  weight: number;
+    79→  uvResistance: number;
+    80→  waterRepellency: number;
+    81→  dustRepellency: number;
+    82→  windRating: string;
+    83→  lifespanMonths: number;
+    84→  costPerSqMeter: number;
+    85→  description: string;
+    86→  supplier: string;
+    87→}
+    88→
+    89→// ─── Constants ───
+    90→const SAFFRON = '#FF9933';
+    91→const WHITE = '#FFFFFF';
+    92→const GREEN = '#138808';
+    93→const NAVY = '#000080';
+    94→const TRICOLOUR = [SAFFRON, WHITE, GREEN];
+    95→const CHART_COLORS = [SAFFRON, '#3B82F6', GREEN, '#8B5CF6', '#EC4899', '#14B8A6'];
+    96→
+    97→const ZONE_COLORS: Record<string, string> = {
+    98→  Central: '#FF9933',
+    99→  South: '#138808',
+   100→  North: '#3B82F6',
+   101→  East: '#8B5CF6',
+   102→  West: '#EC4899',
+   103→  'New Delhi': '#14B8A6',
+   104→  'North West': '#F59E0B',
+   105→  'South West': '#6366F1',
+   106→};
+   107→
+   108→const SEVERITY_COLORS: Record<string, string> = {
+   109→  Critical: 'bg-red-500',
+   110→  High: 'bg-orange-500',
+   111→  Medium: 'bg-yellow-500',
+   112→  Low: 'bg-green-500',
+   113→};
+   114→
+   115→const ALERT_ICONS: Record<string, React.ReactNode> = {
+   116→  Tear: <AlertTriangle className="w-4 h-4" />,
+   117→  Dirt: <Droplets className="w-4 h-4" />,
+   118→  Wind: <Wind className="w-4 h-4" />,
+   119→  Pollution: <ThermometerSun className="w-4 h-4" />,
+   120→  SensorOffline: <WifiOff className="w-4 h-4" />,
+   121→};
+   122→
+   123→// ─── Helper ───
+   124→function formatCurrency(val: number): string {
+   125→  if (val >= 10000000) return `₹${(val / 10000000).toFixed(1)} Cr`;
+   126→  if (val >= 100000) return `₹${(val / 100000).toFixed(1)} L`;
+   127→  if (val >= 1000) return `₹${(val / 1000).toFixed(1)}K`;
+   128→  return `₹${val}`;
+   129→}
+   130→
+   131→function timeAgo(dateStr: string): string {
+   132→  const diff = Date.now() - new Date(dateStr).getTime();
+   133→  const mins = Math.floor(diff / 60000);
+   134→  if (mins < 60) return `${mins}m ago`;
+   135→  const hrs = Math.floor(mins / 60);
+   136→  if (hrs < 24) return `${hrs}h ago`;
+   137→  return `${Math.floor(hrs / 24)}d ago`;
+   138→}
+   139→
+   140→// ─── Main Component ───
+   141→export default function Home() {
+   142→  const [data, setData] = useState<DashboardData | null>(null);
+   143→  const [loading, setLoading] = useState(true);
+   144→  const [activeTab, setActiveTab] = useState('dashboard');
+   145→
+   146→  const fetchDashboard = useCallback(async () => {
+   147→    try {
+   148→      const res = await fetch('/api/dashboard');
+   149→      const json = await res.json();
+   150→      setData(json);
+   151→    } catch (err) {
+   152→      console.error('Fetch error:', err);
+   153→    } finally {
+   154→      setLoading(false);
+   155→    }
+   156→  }, []);
+   157→
+   158→  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+   159→
+   160→  // Auto-refresh every 30s
+   161→  useEffect(() => {
+   162→    const interval = setInterval(fetchDashboard, 30000);
+   163→    return () => clearInterval(interval);
+   164→  }, [fetchDashboard]);
+   165→
+   166→  if (loading || !data) {
+   167→    return (
+   168→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-green-50">
+   169→        <motion.div
+   170→          initial={{ opacity: 0, scale: 0.8 }}
+   171→          animate={{ opacity: 1, scale: 1 }}
+   172→          className="text-center"
+   173→        >
+   174→          <div className="flex gap-1 justify-center mb-4">
+   175→            {[SAFFRON, WHITE, GREEN].map((c, i) => (
+   176→              <motion.div
+   177→                key={i}
+   178→                className="w-3 h-12 rounded-full"
+   179→                style={{ backgroundColor: c, border: c === WHITE ? '1px solid #e5e7eb' : 'none' }}
+   180→                animate={{ scaleY: [1, 1.3, 1] }}
+   181→                transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
+   182→              />
+   183→            ))}
+   184→          </div>
+   185→          <p className="text-lg font-semibold text-gray-700">Loading Dhvani...</p>
+   186→          <p className="text-sm text-gray-400 mt-1">Smart & Resilient National Flag System</p>
+   187→        </motion.div>
+   188→      </div>
+   189→    );
+   190→  }
+   191→
+   192→  const { flags, sensors, alerts, costProjections, recentAlerts, materials, flagsByZone, flagsByFabric, alertsByType, alertsBySeverity, flagsByWind, avgHealthScore } = data;
+   193→
+   194→  return (
+   195→    <div className="min-h-screen bg-gradient-to-br from-orange-50/40 via-white to-green-50/40">
+   196→      {/* ─── Header ─── */}
+   197→      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-orange-100 shadow-sm">
+   198→        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
+   199→          <div className="flex items-center gap-3">
+   200→            {/* Tricolour bar */}
+   201→            <div className="flex flex-col w-1.5 h-10 rounded-full overflow-hidden">
+   202→              <div className="flex-1" style={{ backgroundColor: SAFFRON }} />
+   203→              <div className="flex-1 bg-white border-x border-gray-200" />
+   204→              <div className="flex-1" style={{ backgroundColor: GREEN }} />
+   205→            </div>
+   206→            <div>
+   207→              <h1 className="text-xl font-bold tracking-tight">
+   208→                <span style={{ color: SAFFRON }}>Dh</span>
+   209→                <span className="text-gray-800">va</span>
+   210→                <span style={{ color: GREEN }}>ni</span>
+   211→              </h1>
+   212→              <p className="text-[10px] text-gray-400 -mt-0.5 tracking-wider uppercase">Smart & Resilient National Flag System</p>
+   213→            </div>
+   214→          </div>
+   215→          <div className="flex items-center gap-4">
+   216→            <div className="hidden md:flex items-center gap-2 text-xs text-gray-500">
+   217→              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-50 text-green-700">
+   218→                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+   219→                Live
+   220→              </span>
+   221→              <span>Auto-refresh: 30s</span>
+   222→            </div>
+   223→            <div className="relative">
+   224→              <Bell className="w-5 h-5 text-gray-500" />
+   225→              {alerts.critical > 0 && (
+   226→                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold">
+   227→                  {alerts.critical}
+   228→                </span>
+   229→              )}
+   230→            </div>
+   231→            <Badge variant="outline" className="text-xs hidden sm:flex">
+   232→              <IndianRupee className="w-3 h-3 mr-1" />
+   233→              {formatCurrency(1040000000)}/yr Current
+   234→            </Badge>
+   235→          </div>
+   236→        </div>
+   237→        {/* Tricolour accent line */}
+   238→        <div className="flex h-0.5">
+   239→          <div className="flex-1" style={{ backgroundColor: SAFFRON }} />
+   240→          <div className="flex-1 bg-white" />
+   241→          <div className="flex-1" style={{ backgroundColor: GREEN }} />
+   242→        </div>
+   243→      </header>
+   244→
+   245→      {/* ─── Main Content ─── */}
+   246→      <main className="max-w-[1600px] mx-auto px-4 py-6">
+   247→        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+   248→          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto gap-1 bg-white/60 backdrop-blur p-1 rounded-xl border">
+   249→            <TabsTrigger value="dashboard" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+   250→              <Gauge className="w-4 h-4" /> Dashboard
+   251→            </TabsTrigger>
+   252→            <TabsTrigger value="iot" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+   253→              <Cpu className="w-4 h-4" /> IoT Monitor
+   254→            </TabsTrigger>
+   255→            <TabsTrigger value="materials" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+   256→              <Microscope className="w-4 h-4" /> Materials Lab
+   257→            </TabsTrigger>
+   258→            <TabsTrigger value="lifecycle" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+   259→              <Recycling className="w-4 h-4" /> Lifecycle
+   260→            </TabsTrigger>
+   261→            <TabsTrigger value="cost" className="flex items-center gap-2 text-xs md:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-50 data-[state=active]:to-green-50 data-[state=active]:shadow-sm">
+   262→              <IndianRupee className="w-4 h-4" /> Cost & ROI
+   263→            </TabsTrigger>
+   264→          </TabsList>
+   265→
+   266→          {/* ════════════════════════════════════════════════════════════ */}
+   267→          {/* TAB 1: DASHBOARD OVERVIEW                                     */}
+   268→          {/* ════════════════════════════════════════════════════════════ */}
+   269→          <TabsContent value="dashboard" className="space-y-6">
+   270→            {/* KPI Cards */}
+   271→            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+   272→              <KPICard icon={<Flag className="w-5 h-5" />} label="Total Flags" value={flags.total.toString()} color={SAFFRON} />
+   273→              <KPICard icon={<CheckCircle2 className="w-5 h-5" />} label="Active" value={flags.active.toString()} color={GREEN} />
+   274→              <KPICard icon={<AlertTriangle className="w-5 h-5" />} label="Damaged" value={flags.damaged.toString()} color="#EF4444" />
+   275→              <KPICard icon={<Activity className="w-5 h-5" />} label="Avg Health" value={`${avgHealthScore}%`} color={avgHealthScore > 70 ? GREEN : avgHealthScore > 40 ? SAFFRON : '#EF4444'} />
+   276→              <KPICard icon={<AlertCircle className="w-5 h-5" />} label="Open Alerts" value={alerts.unresolved.toString()} color="#F97316" />
+   277→              <KPICard icon={<Cpu className="w-5 h-5" />} label="Sensors Online" value={`${sensors.online}/${sensors.total}`} color="#3B82F6" />
+   278→            </div>
+   279→
+   280→            {/* Main Grid */}
+   281→            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   282→              {/* Zone Distribution */}
+   283→              <Card className="lg:col-span-2 border-0 shadow-md">
+   284→                <CardHeader className="pb-2">
+   285→                  <CardTitle className="text-base flex items-center gap-2">
+   286→                    <MapPin className="w-4 h-4" style={{ color: SAFFRON }} />
+   287→                    Flags by Zone — Delhi NCT
+   288→                  </CardTitle>
+   289→                </CardHeader>
+   290→                <CardContent>
+   291→                  <ResponsiveContainer width="100%" height={300}>
+   292→                    <BarChart data={flagsByZone} layout="vertical" margin={{ left: 80 }}>
+   293→                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+   294→                      <XAxis type="number" allowDecimals={false} />
+   295→                      <YAxis type="category" dataKey="zone" tick={{ fontSize: 12 }} />
+   296→                      <Tooltip />
+   297→                      <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+   298→                        {flagsByZone.map((entry, idx) => (
+   299→                          <Cell key={idx} fill={ZONE_COLORS[entry.zone] || CHART_COLORS[idx % CHART_COLORS.length]} />
+   300→                        ))}
+   301→                      </Bar>
+   302→                    </BarChart>
+   303→                  </ResponsiveContainer>
+   304→                </CardContent>
+   305→              </Card>
+   306→
+   307→              {/* Fabric Distribution */}
+   308→              <Card className="border-0 shadow-md">
+   309→                <CardHeader className="pb-2">
+   310→                  <CardTitle className="text-base flex items-center gap-2">
+   311→                    <Layers className="w-4 h-4" style={{ color: GREEN }} />
+   312→                    Fabric Distribution
+   313→                  </CardTitle>
+   314→                </CardHeader>
+   315→                <CardContent>
+   316→                  <ResponsiveContainer width="100%" height={250}>
+   317→                    <PieChart>
+   318→                      <Pie data={flagsByFabric} dataKey="count" nameKey="fabricType" cx="50%" cy="50%" outerRadius={80} innerRadius={50} label={({ fabricType, count }) => `${fabricType.replace(/([A-Z])/g, ' $1')} (${count})`} labelLine={false}>
+   319→                        {flagsByFabric.map((_, idx) => (
+   320→                          <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+   321→                        ))}
+   322→                      </Pie>
+   323→                      <Tooltip />
+   324→                    </PieChart>
+   325→                  </ResponsiveContainer>
+   326→                  <div className="flex flex-wrap gap-2 justify-center mt-2">
+   327→                    {flagsByFabric.map((f, i) => (
+   328→                      <Badge key={i} variant="outline" className="text-[10px]" style={{ borderColor: CHART_COLORS[i % CHART_COLORS.length], color: CHART_COLORS[i % CHART_COLORS.length] }}>
+   329→                        {f.fabricType.replace(/([A-Z])/g, ' $1')}: {f.count}
+   330→                      </Badge>
+   331→                    ))}
+   332→                  </div>
+   333→                </CardContent>
+   334→              </Card>
+   335→            </div>
+   336→
+   337→            {/* Alerts + Health */}
+   338→            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   339→              {/* Recent Alerts */}
+   340→              <Card className="border-0 shadow-md">
+   341→                <CardHeader className="pb-2">
+   342→                  <CardTitle className="text-base flex items-center gap-2">
+   343→                    <Bell className="w-4 h-4 text-red-500" />
+   344→                    Recent Alerts
+   345→                    {alerts.critical > 0 && <Badge variant="destructive" className="text-[10px] ml-1">{alerts.critical} Critical</Badge>}
+   346→                  </CardTitle>
+   347→                </CardHeader>
+   348→                <CardContent>
+   349→                  <div className="space-y-2 max-h-72 overflow-y-auto">
+   350→                    {recentAlerts.map((alert) => (
+   351→                      <motion.div
+   352→                        key={alert.id}
+   353→                        initial={{ opacity: 0, x: -10 }}
+   354→                        animate={{ opacity: 1, x: 0 }}
+   355→                        className={`flex items-start gap-3 p-3 rounded-lg ${alert.severity === 'Critical' ? 'bg-red-50 border border-red-100' : alert.severity === 'High' ? 'bg-orange-50 border border-orange-100' : 'bg-gray-50 border border-gray-100'}`}
+   356→                      >
+   357→                        <div className="mt-0.5" style={{ color: alert.severity === 'Critical' ? '#EF4444' : alert.severity === 'High' ? '#F97316' : '#6B7280' }}>
+   358→                          {ALERT_ICONS[alert.alertType] || <AlertCircle className="w-4 h-4" />}
+   359→                        </div>
+   360→                        <div className="flex-1 min-w-0">
+   361→                          <div className="flex items-center gap-2 mb-0.5">
+   362→                            <Badge variant="outline" className="text-[9px] py-0">{alert.flag.flagId}</Badge>
+   363→                            <span className="text-xs font-medium">{alert.flag.location}</span>
+   364→                            {alert.aiConfidence && (
+   365→                              <Badge className="text-[9px] py-0 bg-purple-100 text-purple-700 border-0">
+   366→                                AI: {Math.round(alert.aiConfidence * 100)}%
+   367→                              </Badge>
+   368→                            )}
+   369→                          </div>
+   370→                          <p className="text-xs text-gray-600 line-clamp-2">{alert.message}</p>
+   371→                          <div className="flex items-center gap-2 mt-1">
+   372→                            <span className="text-[10px] text-gray-400">{timeAgo(alert.createdAt)}</span>
+   373→                            {alert.isResolved ? (
+   374→                              <Badge className="text-[9px] py-0 bg-green-100 text-green-700 border-0">Resolved</Badge>
+   375→                            ) : (
+   376→                              <Badge className="text-[9px] py-0 bg-red-100 text-red-700 border-0">Open</Badge>
+   377→                            )}
+   378→                          </div>
+   379→                        </div>
+   380→                      </motion.div>
+   381→                    ))}
+   382→                  </div>
+   383→                </CardContent>
+   384→              </Card>
+   385→
+   386→              {/* Health Score + Alert Breakdown */}
+   387→              <div className="space-y-6">
+   388→                <Card className="border-0 shadow-md">
+   389→                  <CardHeader className="pb-2">
+   390→                    <CardTitle className="text-base flex items-center gap-2">
+   391→                      <Shield className="w-4 h-4" style={{ color: SAFFRON }} />
+   392→                      Fleet Health Score
+   393→                    </CardTitle>
+   394→                  </CardHeader>
+   395→                  <CardContent>
+   396→                    <div className="flex items-center gap-6">
+   397→                      <div className="relative w-32 h-32">
+   398→                        <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+   399→                          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f0f0f0" strokeWidth="3" />
+   400→                          <circle cx="18" cy="18" r="15.5" fill="none" stroke={avgHealthScore > 70 ? GREEN : avgHealthScore > 40 ? SAFFRON : '#EF4444'} strokeWidth="3" strokeDasharray={`${avgHealthScore} 100`} strokeLinecap="round" />
+   401→                        </svg>
+   402→                        <div className="absolute inset-0 flex items-center justify-center">
+   403→                          <span className="text-2xl font-bold">{avgHealthScore}%</span>
+   404→                        </div>
+   405→                      </div>
+   406→                      <div className="space-y-2 flex-1">
+   407→                        <div className="flex justify-between text-xs"><span className="text-gray-500">Active Flags</span><span className="font-semibold text-green-600">{flags.active}</span></div>
+   408→                        <Progress value={(flags.active / flags.total) * 100} className="h-2" />
+   409→                        <div className="flex justify-between text-xs"><span className="text-gray-500">Damaged</span><span className="font-semibold text-red-600">{flags.damaged}</span></div>
+   410→                        <Progress value={(flags.damaged / flags.total) * 100} className="h-2" />
+   411→                        <div className="flex justify-between text-xs"><span className="text-gray-500">Sensors Online</span><span className="font-semibold text-blue-600">{Math.round((sensors.online / sensors.total) * 100)}%</span></div>
+   412→                        <Progress value={(sensors.online / sensors.total) * 100} className="h-2" />
+   413→                      </div>
+   414→                    </div>
+   415→                  </CardContent>
+   416→                </Card>
+   417→
+   418→                <Card className="border-0 shadow-md">
+   419→                  <CardHeader className="pb-2">
+   420→                    <CardTitle className="text-base">Alert Distribution</CardTitle>
+   421→                  </CardHeader>
+   422→                  <CardContent>
+   423→                    <ResponsiveContainer width="100%" height={140}>
+   424→                      <BarChart data={alertsByType} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+   425→                        <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+   426→                        <XAxis dataKey="type" tick={{ fontSize: 10 }} />
+   427→                        <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+   428→                        <Tooltip />
+   429→                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+   430→                          {alertsByType.map((_, i) => (
+   431→                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+   432→                          ))}
+   433→                        </Bar>
+   434→                      </BarChart>
+   435→                    </ResponsiveContainer>
+   436→                  </CardContent>
+   437→                </Card>
+   438→              </div>
+   439→            </div>
+   440→          </TabsContent>
+   441→
+   442→          {/* ════════════════════════════════════════════════════════════ */}
+   443→          {/* TAB 2: IoT MONITORING                                        */}
+   444→          {/* ════════════════════════════════════════════════════════════ */}
+   445→          <TabsContent value="iot" className="space-y-6">
+   446→            {/* IoT Status Cards */}
+   447→            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+   448→              <KPICard icon={<Cpu className="w-5 h-5" />} label="Total Sensors" value={sensors.total.toString()} color="#3B82F6" />
+   449→              <KPICard icon={<Wifi className="w-5 h-5" />} label="Online" value={sensors.online.toString()} color={GREEN} />
+   450→              <KPICard icon={<WifiOff className="w-5 h-5" />} label="Offline" value={sensors.offline.toString()} color="#EF4444" />
+   451→              <KPICard icon={<AlertTriangle className="w-5 h-5" />} label="Critical Alerts" value={alerts.critical.toString()} color="#EF4444" />
+   452→              <KPICard icon={<Eye className="w-5 h-5" />} label="AI-CV Alerts" value={alertsByType.filter(a => a.type === 'Tear' || a.type === 'Dirt').reduce((s, a) => s + a.count, 0).toString()} color="#8B5CF6" />
+   453→            </div>
+   454→
+   455→            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   456→              {/* Sensor Architecture */}
+   457→              <Card className="border-0 shadow-md">
+   458→                <CardHeader>
+   459→                  <CardTitle className="text-base flex items-center gap-2">
+   460→                    <Radio className="w-4 h-4" style={{ color: SAFFRON }} />
+   461→                    IoT Sensor Architecture — Dhvani Edge Network
+   462→                  </CardTitle>
+   463→                  <CardDescription>5 sensor types per flag mast, connected to Central Control via LoRaWAN + 4G</CardDescription>
+   464→                </CardHeader>
+   465→                <CardContent>
+   466→                  <div className="space-y-3">
+   467→                    {[
+   468→                      { type: 'Accelerometer', icon: <Activity className="w-4 h-4" />, desc: 'Detects vibration patterns, flag flutter frequency, and structural resonance anomalies', color: '#3B82F6' },
+   469→                      { type: 'Strain Gauge', icon: <Gauge className="w-4 h-4" />, desc: 'Measures fabric tension at 6 critical stress points (hoist, fly-end, seams) in microstrain', color: '#8B5CF6' },
+   470→                      { type: 'Wind Speed', icon: <Wind className="w-4 h-4" />, desc: 'Anemometer at mast top — triggers auto-retract at >80 km/h, storm warning at >60 km/h', color: SAFFRON },
+   471→                      { type: 'Humidity', icon: <Droplets className="w-4 h-4" />, desc: 'Monitors moisture absorption — correlates with fabric degradation and coating effectiveness', color: '#14B8A6' },
+   472→                      { type: 'Camera (AI-CV)', icon: <ScanLine className="w-4 h-4" />, desc: '360° hemispheric camera with edge AI — YOLOv8 tear detection, dirt opacity scoring', color: '#EC4899' },
+   473→                    ].map((sensor, i) => (
+   474→                      <motion.div
+   475→                        key={i}
+   476→                        initial={{ opacity: 0, y: 10 }}
+   477→                        animate={{ opacity: 1, y: 0 }}
+   478→                        transition={{ delay: i * 0.1 }}
+   479→                        className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100"
+   480→                      >
+   481→                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${sensor.color}15`, color: sensor.color }}>
+   482→                          {sensor.icon}
+   483→                        </div>
+   484→                        <div>
+   485→                          <div className="flex items-center gap-2">
+   486→                            <span className="text-sm font-semibold">{sensor.type}</span>
+   487→                            <Badge variant="outline" className="text-[9px] py-0">x{flags.total}</Badge>
+   488→                          </div>
+   489→                          <p className="text-xs text-gray-500 mt-0.5">{sensor.desc}</p>
+   490→                        </div>
+   491→                      </motion.div>
+   492→                    ))}
+   493→                  </div>
+   494→
+   495→                  <Separator className="my-4" />
+   496→
+   497→                  <div className="space-y-2">
+   498→                    <h4 className="text-sm font-semibold">Communication Stack</h4>
+   499→                    <div className="grid grid-cols-2 gap-2">
+   500→                      {[
+   501→                        { label: 'Edge → Gateway', value: 'LoRaWAN 868MHz', icon: <Radio className="w-3 h-3" /> },
+   502→                        { label: 'Gateway → Cloud', value: '4G LTE + Fiber', icon: <Wifi className="w-3 h-3" /> },
+   503→                        { label: 'AI Inference', value: 'Edge TPU + Cloud', icon: <Cpu className="w-3 h-3" /> },
+   504→                        { label: 'Alert Latency', value: '< 3 seconds', icon: <Zap className="w-3 h-3" /> },
+   505→                      ].map((item, i) => (
+   506→                        <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-gray-100 text-xs">
+   507→                          <span style={{ color: SAFFRON }}>{item.icon}</span>
+   508→                          <div>
+   509→                            <div className="text-gray-400 text-[10px]">{item.label}</div>
+   510→                            <div className="font-medium">{item.value}</div>
+   511→                          </div>
+   512→                        </div>
+   513→                      ))}
+   514→                    </div>
+   515→                  </div>
+   516→                </CardContent>
+   517→              </Card>
+   518→
+   519→              {/* Alert Severity + Wind Exposure */}
+   520→              <div className="space-y-6">
+   521→                <Card className="border-0 shadow-md">
+   522→                  <CardHeader className="pb-2">
+   523→                    <CardTitle className="text-base flex items-center gap-2">
+   524→                      <AlertTriangle className="w-4 h-4 text-red-500" />
+   525→                      Alert Severity Breakdown
+   526→                    </CardTitle>
+   527→                  </CardHeader>
+   528→                  <CardContent>
+   529→                    <ResponsiveContainer width="100%" height={200}>
+   530→                      <PieChart>
+   531→                        <Pie data={alertsBySeverity} dataKey="count" nameKey="severity" cx="50%" cy="50%" outerRadius={75} innerRadius={45} label={({ severity, count }) => `${severity}: ${count}`} labelLine={false}>
+   532→                          {alertsBySeverity.map((entry, idx) => {
+   533→                            const colors: Record<string, string> = { Critical: '#EF4444', High: '#F97316', Medium: '#EAB308', Low: '#22C55E' };
+   534→                            return <Cell key={idx} fill={colors[entry.severity] || CHART_COLORS[idx]} />;
+   535→                          })}
+   536→                        </Pie>
+   537→                        <Tooltip />
+   538→                      </PieChart>
+   539→                    </ResponsiveContainer>
+   540→                  </CardContent>
+   541→                </Card>
+   542→
+   543→                <Card className="border-0 shadow-md">
+   544→                  <CardHeader className="pb-2">
+   545→                    <CardTitle className="text-base flex items-center gap-2">
+   546→                      <Wind className="w-4 h-4" style={{ color: SAFFRON }} />
+   547→                      Wind Exposure Distribution
+   548→                    </CardTitle>
+   549→                  </CardHeader>
+   550→                  <CardContent>
+   551→                    <ResponsiveContainer width="100%" height={160}>
+   552→                      <BarChart data={flagsByWind} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+   553→                        <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+   554→                        <XAxis dataKey="windExposure" tick={{ fontSize: 11 }} />
+   555→                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+   556→                        <Tooltip />
+   557→                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+   558→                          {flagsByWind.map((entry, i) => {
+   559→                            const colors: Record<string, string> = { Low: '#22C55E', Medium: SAFFRON, High: '#F97316', Extreme: '#EF4444' };
+   560→                            return <Cell key={i} fill={colors[entry.windExposure] || CHART_COLORS[i]} />;
+   561→                          })}
+   562→                        </Bar>
+   563→                      </BarChart>
+   564→                    </ResponsiveContainer>
+   565→                  </CardContent>
+   566→                </Card>
+   567→
+   568→                {/* Live Alert Stream */}
+   569→                <Card className="border-0 shadow-md">
+   570→                  <CardHeader className="pb-2">
+   571→                    <CardTitle className="text-base flex items-center gap-2">
+   572→                      <Activity className="w-4 h-4" style={{ color: GREEN }} />
+   573→                      Live Alert Stream
+   574→                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+   575→                    </CardTitle>
+   576→                  </CardHeader>
+   577→                  <CardContent>
+   578→                    <div className="space-y-2 max-h-48 overflow-y-auto">
+   579→                      {recentAlerts.slice(0, 8).map((alert) => (
+   580→                        <div key={alert.id} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 text-xs">
+   581→                          <span className={`w-2 h-2 rounded-full ${SEVERITY_COLORS[alert.severity] || 'bg-gray-400'}`} />
+   582→                          <span className="font-mono text-gray-400">{alert.flag.flagId}</span>
+   583→                          <span className="flex-1 truncate">{alert.alertType} — {alert.flag.location}</span>
+   584→                          <span className="text-gray-400 shrink-0">{timeAgo(alert.createdAt)}</span>
+   585→                        </div>
+   586→                      ))}
+   587→                    </div>
+   588→                  </CardContent>
+   589→                </Card>
+   590→              </div>
+   591→            </div>
+   592→
+   593→            {/* AI Computer Vision Section */}
+   594→            <Card className="border-0 shadow-md bg-gradient-to-r from-purple-50 to-pink-50">
+   595→              <CardHeader>
+   596→                <CardTitle className="text-base flex items-center gap-2">
+   597→                  <Eye className="w-4 h-4 text-purple-600" />
+   598→                  AI Computer Vision System — Tear & Dirt Detection Pipeline
+   599→                </CardTitle>
+   600→                <CardDescription>Real-time YOLOv8 + custom classifier running on Edge TPU at each flag mast</CardDescription>
+   601→              </CardHeader>
+   602→              <CardContent>
+   603→                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+   604→                  {[
+   605→                    { step: '1', title: 'Capture', desc: '360° hemispheric camera captures flag image every 30 seconds during daylight, every 2 min with IR at night', color: '#3B82F6' },
+   606→                    { step: '2', title: 'Detect', desc: 'YOLOv8-nano model runs on Edge TPU — classifies tears (>5mm), dirt patches, color fading with 94% mAP', color: '#8B5CF6' },
+   607→                    { step: '3', title: 'Classify', desc: 'Severity classifier: Minor (<2cm tear), Major (2-10cm), Critical (>10cm or multi-tear). Dirt scored 0-100 opacity', color: SAFFRON },
+   608→                    { step: '4', title: 'Alert', desc: 'Push notification to Dhvani Control Room + auto-create work order. AI confidence tag attached for human verification', color: GREEN },
+   609→                  ].map((item, i) => (
+   610→                    <div key={i} className="relative p-4 rounded-xl bg-white/80 border border-gray-100">
+   611→                      <div className="absolute -top-3 -left-1 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: item.color }}>
+   612→                        {item.step}
+   613→                      </div>
+   614→                      <h4 className="font-semibold text-sm mt-2">{item.title}</h4>
+   615→                      <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+   616→                      {i < 3 && <ChevronRight className="w-4 h-4 absolute -right-3 top-1/2 -translate-y-1/2 text-gray-300 hidden md:block" />}
+   617→                    </div>
+   618→                  ))}
+   619→                </div>
+   620→              </CardContent>
+   621→            </Card>
+   622→          </TabsContent>
+   623→
+   624→          {/* ════════════════════════════════════════════════════════════ */}
+   625→          {/* TAB 3: MATERIALS LAB                                         */}
+   626→          {/* ════════════════════════════════════════════════════════════ */}
+   627→          <TabsContent value="materials" className="space-y-6">
+   628→            <Card className="border-0 shadow-md bg-gradient-to-r from-orange-50 to-green-50">
+   629→              <CardHeader>
+   630→                <CardTitle className="text-lg flex items-center gap-2">
+   631→                  <Microscope className="w-5 h-5" style={{ color: SAFFRON }} />
+   632→                  Material Innovation Lab
+   633→                </CardTitle>
+   634→                <CardDescription>
+   635→                  Comparative analysis of advanced fabric and coating technologies for extending Tricolour lifespan by 2-3x
+   636→                </CardDescription>
+   637→              </CardHeader>
+   638→            </Card>
+   639→
+   640→            {/* Material Cards */}
+   641→            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   642→              {materials.map((mat, i) => (
+   643→                <motion.div
+   644→                  key={mat.id}
+   645→                  initial={{ opacity: 0, y: 20 }}
+   646→                  animate={{ opacity: 1, y: 0 }}
+   647→                  transition={{ delay: i * 0.1 }}
+   648→                >
+   649→                  <Card className={`border-0 shadow-md h-full ${mat.name.includes('Graphene') ? 'ring-2 ring-purple-200 bg-gradient-to-br from-purple-50 to-white' : mat.name.includes('Kevlar') ? 'ring-2 ring-blue-200' : ''}`}>
+   650→                    <CardHeader className="pb-2">
+   651→                      <div className="flex items-center justify-between">
+   652→                        <CardTitle className="text-sm">{mat.name}</CardTitle>
+   653→                        <div className="flex gap-1">
+   654→                          <Badge variant="outline" className="text-[9px]">{mat.category}</Badge>
+   655→                          {mat.name.includes('Graphene') && <Badge className="text-[9px] bg-purple-100 text-purple-700 border-0">Next-Gen</Badge>}
+   656→                          {mat.name.includes('Kevlar') && <Badge className="text-[9px] bg-blue-100 text-blue-700 border-0">Military-Grade</Badge>}
+   657→                        </div>
+   658→                      </div>
+   659→                      <p className="text-xs text-gray-500">{mat.description}</p>
+   660→                    </CardHeader>
+   661→                    <CardContent>
+   662→                      <div className="grid grid-cols-3 gap-3 mb-4">
+   663→                        <div className="text-center p-2 rounded-lg bg-gray-50">
+   664→                          <div className="text-lg font-bold" style={{ color: mat.lifespanMonths >= 12 ? GREEN : mat.lifespanMonths >= 6 ? SAFFRON : '#EF4444' }}>
+   665→                            {mat.lifespanMonths}mo
+   666→                          </div>
+   667→                          <div className="text-[10px] text-gray-400">Lifespan</div>
+   668→                        </div>
+   669→                        <div className="text-center p-2 rounded-lg bg-gray-50">
+   670→                          <div className="text-lg font-bold">{mat.tensileStrength > 0 ? `${mat.tensileStrength}` : 'N/A'}</div>
+   671→                          <div className="text-[10px] text-gray-400">Tensile (N/m2)</div>
+   672→                        </div>
+   673→                        <div className="text-center p-2 rounded-lg bg-gray-50">
+   674→                          <div className="text-lg font-bold">{formatCurrency(mat.costPerSqMeter)}/m2</div>
+   675→                          <div className="text-[10px] text-gray-400">Cost</div>
+   676→                        </div>
+   677→                      </div>
+   678→
+   679→                      {/* Performance Bars */}
+   680→                      <div className="space-y-2">
+   681→                        {[
+   682→                          { label: 'UV Resistance', value: mat.uvResistance },
+   683→                          { label: 'Water Repellency', value: mat.waterRepellency },
+   684→                          { label: 'Dust Repellency', value: mat.dustRepellency },
+   685→                        ].map((perf, j) => (
+   686→                          <div key={j}>
+   687→                            <div className="flex justify-between text-[10px] text-gray-500 mb-0.5">
+   688→                              <span>{perf.label}</span>
+   689→                              <span>{perf.value}/10</span>
+   690→                            </div>
+   691→                            <Progress value={perf.value * 10} className="h-1.5" />
+   692→                          </div>
+   693→                        ))}
+   694→                      </div>
+   695→
+   696→                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+   697→                        <div className="flex items-center gap-1 text-[10px] text-gray-400">
+   698→                          <Wind className="w-3 h-3" /> {mat.windRating}
+   699→                        </div>
+   700→                        <div className="text-[10px] text-gray-400">{mat.weight}g/m2</div>
+   701→                        <div className="text-[10px] text-gray-400">{mat.supplier}</div>
+   702→                      </div>
+   703→                    </CardContent>
+   704→                  </Card>
+   705→                </motion.div>
+   706→              ))}
+   707→            </div>
+   708→
+   709→            {/* Radar Comparison Chart */}
+   710→            <Card className="border-0 shadow-md">
+   711→              <CardHeader>
+   712→                <CardTitle className="text-base">Material Performance Comparison (Radar)</CardTitle>
+   713→              </CardHeader>
+   714→              <CardContent>
+   715→                <ResponsiveContainer width="100%" height={350}>
+   716→                  <RadarChart data={[
+   717→                    { metric: 'Tensile Strength', 'Standard Polyester': 25, 'NanoCoated v2': 38, 'Kevlar Blend': 67, 'Graphene Polymer': 100 },
+   718→                    { metric: 'UV Resistance', 'Standard Polyester': 50, 'NanoCoated v2': 80, 'Kevlar Blend': 70, 'Graphene Polymer': 90 },
+   719→                    { metric: 'Water Repellency', 'Standard Polyester': 30, 'NanoCoated v2': 90, 'Kevlar Blend': 60, 'Graphene Polymer': 100 },
+   720→                    { metric: 'Dust Repellency', 'Standard Polyester': 20, 'NanoCoated v2': 80, 'Kevlar Blend': 50, 'Graphene Polymer': 90 },
+   721→                    { metric: 'Lifespan', 'Standard Polyester': 17, 'NanoCoated v2': 50, 'Kevlar Blend': 67, 'Graphene Polymer': 100 },
+   722→                    { metric: 'Weight (inverse)', 'Standard Polyester': 51, 'NanoCoated v2': 61, 'Kevlar Blend': 46, 'Graphene Polymer': 78 },
+   723→                  ]}>
+   724→                    <PolarGrid />
+   725→                    <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10 }} />
+   726→                    <PolarRadiusAxis tick={{ fontSize: 9 }} />
+   727→                    <Radar name="Standard Polyester" dataKey="Standard Polyester" stroke="#9CA3AF" fill="#9CA3AF" fillOpacity={0.15} />
+   728→                    <Radar name="NanoCoated v2" dataKey="NanoCoated v2" stroke={SAFFRON} fill={SAFFRON} fillOpacity={0.15} />
+   729→                    <Radar name="Kevlar Blend" dataKey="Kevlar Blend" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.15} />
+   730→                    <Radar name="Graphene Polymer" dataKey="Graphene Polymer" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.15} />
+   731→                    <Legend />
+   732→                  </RadarChart>
+   733→                </ResponsiveContainer>
+   734→              </CardContent>
+   735→            </Card>
+   736→          </TabsContent>
+   737→
+   738→          {/* ════════════════════════════════════════════════════════════ */}
+   739→          {/* TAB 4: LIFECYCLE MANAGEMENT                                   */}
+   740→          {/* ════════════════════════════════════════════════════════════ */}
+   741→          <TabsContent value="lifecycle" className="space-y-6">
+   742→            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   743→              <KPICard icon={<Flag className="w-5 h-5" />} label="Total Records" value={data.lifecycle.total.toString()} color="#3B82F6" />
+   744→              <KPICard icon={<Recycling className="w-5 h-5" />} label="Flag Code Compliant" value={`${Math.round((data.lifecycle.flagCodeCompliant / data.lifecycle.total) * 100)}%`} color={GREEN} />
+   745→              <KPICard icon={<CheckCircle2 className="w-5 h-5" />} label="Inspections" value={data.inspections.total.toString()} color={SAFFRON} />
+   746→              <KPICard icon={<Shield className="w-5 h-5" />} label="Compliance Rate" value="100%" color={GREEN} />
+   747→            </div>
+   748→
+   749→            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   750→              {/* Flag Code of India Compliance */}
+   751→              <Card className="border-0 shadow-md">
+   752→                <CardHeader>
+   753→                  <CardTitle className="text-base flex items-center gap-2">
+   754→                    <Shield className="w-5 h-5" style={{ color: SAFFRON }} />
+   755→                    Flag Code of India — Compliance Framework
+   756→                  </CardTitle>
+   757→                  <CardDescription>
+   758→                    Section XI of the Flag Code of India mandates respectful disposal of the National Flag
+   759→                  </CardDescription>
+   760→                </CardHeader>
+   761→                <CardContent>
+   762→                  <div className="space-y-3">
+   763→                    {[
+   764→                      { step: '1', title: 'Damage Detection', desc: 'IoT sensors detect tear/dirt exceeding threshold. AI-CV confirms with photographic evidence and severity classification.', icon: <Eye className="w-4 h-4" />, color: '#3B82F6' },
+   765→                      { step: '2', title: 'Dignified Removal', desc: 'Flag is lowered with full protocol by trained PWD personnel. Never touches the ground. Folded in the prescribed triangular fold.', icon: <Flag className="w-4 h-4" />, color: SAFFRON },
+   766→                      { step: '3', title: 'Inspection & Certification', desc: 'Retired flag is inspected and a Flag Code Compliance Certificate (FCC) is issued with unique tracking number.', icon: <CheckCircle2 className="w-4 h-4" />, color: GREEN },
+   767→                      { step: '4', title: 'Respectful Disposal', desc: 'Primary: Respectful burning in private with dignity. Alternative: Recycling into commemorative items with honor ceremony.', icon: <Leaf className="w-4 h-4" />, color: '#14B8A6' },
+   768→                    ].map((item, i) => (
+   769→                      <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+   770→                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: item.color }}>
+   771→                          {item.step}
+   772→                        </div>
+   773→                        <div>
+   774→                          <div className="flex items-center gap-2">
+   775→                            <span className="text-sm font-semibold">{item.title}</span>
+   776→                            <span style={{ color: item.color }}>{item.icon}</span>
+   777→                          </div>
+   778→                          <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+   779→                        </div>
+   780→                      </div>
+   781→                    ))}
+   782→                  </div>
+   783→                </CardContent>
+   784→              </Card>
+   785→
+   786→              {/* Recycling Pathways */}
+   787→              <Card className="border-0 shadow-md">
+   788→                <CardHeader>
+   789→                  <CardTitle className="text-base flex items-center gap-2">
+   790→                    <Recycling className="w-5 h-5" style={{ color: GREEN }} />
+   791→                    Sustainable Recycling Pathways
+   792→                  </CardTitle>
+   793→                  <CardDescription>
+   794→                    Converting retired flags into dignified, valuable outcomes while maintaining full Flag Code compliance
+   795→                  </CardDescription>
+   796→                </CardHeader>
+   797→                <CardContent>
+   798→                  <div className="space-y-3">
+   799→                    {[
+   800→                      { title: 'Commemorative Patches', pct: 35, desc: 'Retired flag fabric is cut into small commemorative patches and distributed to schools, government offices, and freedom fighter families with certificates of authenticity.', revenue: '₹15L/year' },
+   801→                      { title: 'Museum & Archives', pct: 20, desc: 'Historically significant flags (e.g., Republic Day, Independence Day) are preserved in the National Flag Museum with proper archival treatment and documentation.', revenue: '₹5L/year' },
+   802→                      { title: 'Ceremonial Ash (Asthi)', pct: 30, desc: 'As per Flag Code, flags are respectfully burned in private. Ash is collected and offered at designated water bodies with full ceremonial protocol, as done for sacred objects.', revenue: 'N/A' },
+   803→                      { title: 'Fiber Recycling', pct: 15, desc: 'Non-ceremonial fabric is processed through fiber recycling facilities. Recovered polyester is used in non-flag government textile applications (tents, tarps).', revenue: '₹10L/year' },
+   804→                    ].map((path, i) => (
+   805→                      <div key={i} className="p-3 rounded-xl border border-gray-100 bg-white">
+   806→                        <div className="flex items-center justify-between mb-2">
+   807→                          <span className="text-sm font-semibold">{path.title}</span>
+   808→                          <div className="flex items-center gap-2">
+   809→                            {path.revenue !== 'N/A' && <Badge className="text-[9px] bg-green-100 text-green-700 border-0">{path.revenue}</Badge>}
+   810→                            <Badge variant="outline" className="text-[9px]">{path.pct}%</Badge>
+   811→                          </div>
+   812→                        </div>
+   813→                        <Progress value={path.pct} className="h-1.5 mb-1.5" />
+   814→                        <p className="text-xs text-gray-500">{path.desc}</p>
+   815→                      </div>
+   816→                    ))}
+   817→                  </div>
+   818→
+   819→                  <div className="mt-4 p-3 rounded-xl bg-green-50 border border-green-100">
+   820→                    <div className="flex items-center gap-2 mb-1">
+   821→                      <Leaf className="w-4 h-4 text-green-600" />
+   822→                      <span className="text-sm font-semibold text-green-800">Total Recycling Revenue Potential</span>
+   823→                    </div>
+   824→                    <p className="text-2xl font-bold text-green-700">₹30 Lakhs/year</p>
+   825→                    <p className="text-xs text-green-600 mt-1">Offset against operational costs. Revenue increases with nano-coated fabrics yielding higher-quality recyclable material.</p>
+   826→                  </div>
+   827→                </CardContent>
+   828→              </Card>
+   829→            </div>
+   830→          </TabsContent>
+   831→
+   832→          {/* ════════════════════════════════════════════════════════════ */}
+   833→          {/* TAB 5: COST & ROI ANALYSIS                                   */}
+   834→          {/* ════════════════════════════════════════════════════════════ */}
+   835→          <TabsContent value="cost" className="space-y-6">
+   836→            {/* The ₹104 Crore Problem */}
+   837→            <Card className="border-0 shadow-md bg-gradient-to-r from-red-50 to-orange-50">
+   838→              <CardHeader>
+   839→                <CardTitle className="text-lg flex items-center gap-2">
+   840→                  <IndianRupee className="w-5 h-5 text-red-600" />
+   841→                  The ₹104 Crore Problem
+   842→                </CardTitle>
+   843→                <CardDescription>
+   844→                  Current annual cost of maintaining Delhi's 500 high-mast national flags with standard polyester and manual processes
+   845→                </CardDescription>
+   846→              </CardHeader>
+   847→              <CardContent>
+   848→                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   849→                  <div className="p-4 rounded-xl bg-white/80">
+   850→                    <div className="text-2xl font-bold text-red-600">₹104 Cr</div>
+   851→                    <div className="text-xs text-gray-500">Annual Cost (Current)</div>
+   852→                  </div>
+   853→                  <div className="p-4 rounded-xl bg-white/80">
+   854→                    <div className="text-2xl font-bold text-red-700">₹208 Cr</div>
+   855→                    <div className="text-xs text-gray-500">If Doubled to 8x/year</div>
+   856→                  </div>
+   857→                  <div className="p-4 rounded-xl bg-white/80">
+   858→                    <div className="text-2xl font-bold" style={{ color: GREEN }}>₹14 Cr</div>
+   859→                    <div className="text-xs text-gray-500">With Smart System</div>
+   860→                  </div>
+   861→                  <div className="p-4 rounded-xl bg-white/80">
+   862→                    <div className="text-2xl font-bold" style={{ color: GREEN }}>86.5%</div>
+   863→                    <div className="text-xs text-gray-500">Potential Savings</div>
+   864→                  </div>
+   865→                </div>
+   866→              </CardContent>
+   867→            </Card>
+   868→
+   869→            {/* Cost Scenario Comparison */}
+   870→            <Card className="border-0 shadow-md">
+   871→              <CardHeader>
+   872→                <CardTitle className="text-base">Scenario Comparison — Annual Cost Breakdown</CardTitle>
+   873→              </CardHeader>
+   874→              <CardContent>
+   875→                <div className="overflow-x-auto">
+   876→                  <table className="w-full text-xs">
+   877→                    <thead>
+   878→                      <tr className="border-b border-gray-200">
+   879→                        <th className="text-left py-3 px-2 font-semibold">Scenario</th>
+   880→                        <th className="text-center py-3 px-2 font-semibold">Replacements/yr</th>
+   881→                        <th className="text-right py-3 px-2 font-semibold">Material</th>
+   882→                        <th className="text-right py-3 px-2 font-semibold">IoT/AI</th>
+   883→                        <th className="text-right py-3 px-2 font-semibold">Labor</th>
+   884→                        <th className="text-right py-3 px-2 font-semibold">Recycling Rev.</th>
+   885→                        <th className="text-right py-3 px-2 font-semibold">Net Cost</th>
+   886→                        <th className="text-center py-3 px-2 font-semibold">Savings</th>
+   887→                      </tr>
+   888→                    </thead>
+   889→                    <tbody>
+   890→                      {costProjections.map((cp, i) => (
+   891→                        <tr key={i} className={`border-b border-gray-100 ${cp.savingsPercent > 50 ? 'bg-green-50/50' : cp.savingsPercent < 0 ? 'bg-red-50/50' : ''}`}>
+   892→                          <td className="py-3 px-2 font-medium">{cp.scenario}</td>
+   893→                          <td className="text-center py-3 px-2">{cp.annualReplacement}x</td>
+   894→                          <td className="text-right py-3 px-2">{formatCurrency(cp.materialCost)}</td>
+   895→                          <td className="text-right py-3 px-2">{formatCurrency(cp.iotCost)}</td>
+   896→                          <td className="text-right py-3 px-2">{formatCurrency(cp.laborCost)}</td>
+   897→                          <td className="text-right py-3 px-2 text-green-600">+{formatCurrency(cp.recyclingRevenue)}</td>
+   898→                          <td className="text-right py-3 px-2 font-bold">{formatCurrency(cp.netCost)}</td>
+   899→                          <td className="text-center py-3 px-2">
+   900→                            <Badge className={`text-[10px] ${cp.savingsPercent > 50 ? 'bg-green-100 text-green-700' : cp.savingsPercent < 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'} border-0`}>
+   901→                              {cp.savingsPercent > 0 ? <ArrowDownRight className="w-3 h-3 mr-0.5" /> : cp.savingsPercent < 0 ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : null}
+   902→                              {cp.savingsPercent > 0 ? `${cp.savingsPercent}%` : cp.savingsPercent < 0 ? `${cp.savingsPercent}%` : 'Baseline'}
+   903→                            </Badge>
+   904→                          </td>
+   905→                        </tr>
+   906→                      ))}
+   907→                    </tbody>
+   908→                  </table>
+   909→                </div>
+   910→              </CardContent>
+   911→            </Card>
+   912→
+   913→            {/* Cost Charts */}
+   914→            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   915→              <Card className="border-0 shadow-md">
+   916→                <CardHeader className="pb-2">
+   917→                  <CardTitle className="text-base">Annual Net Cost by Scenario</CardTitle>
+   918→                </CardHeader>
+   919→                <CardContent>
+   920→                  <ResponsiveContainer width="100%" height={300}>
+   921→                    <BarChart data={costProjections.map(cp => ({
+   922→                      scenario: cp.scenario.length > 20 ? cp.scenario.substring(0, 20) + '...' : cp.scenario,
+   923→                      netCost: cp.netCost / 10000000,
+   924→                      savings: cp.savingsPercent,
+   925→                    }))} margin={{ bottom: 40 }}>
+   926→                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+   927→                      <XAxis dataKey="scenario" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" />
+   928→                      <YAxis tick={{ fontSize: 10 }} label={{ value: '₹ Crores', angle: -90, position: 'insideLeft', style: { fontSize: 10 } }} />
+   929→                      <Tooltip formatter={(v: number) => [`₹${v.toFixed(1)} Cr`, 'Net Cost']} />
+   930→                      <Bar dataKey="netCost" radius={[4, 4, 0, 0]}>
+   931→                        {costProjections.map((cp, i) => (
+   932→                          <Cell key={i} fill={cp.savingsPercent > 50 ? GREEN : cp.savingsPercent < 0 ? '#EF4444' : cp.savingsPercent > 0 ? SAFFRON : '#9CA3AF'} />
+   933→                        ))}
+   934→                      </Bar>
+   935→                    </BarChart>
+   936→                  </ResponsiveContainer>
+   937→                </CardContent>
+   938→              </Card>
+   939→
+   940→              <Card className="border-0 shadow-md">
+   941→                <CardHeader className="pb-2">
+   942→                  <CardTitle className="text-base">Savings Trajectory Over 5 Years (Kevlar + IoT)</CardTitle>
+   943→                </CardHeader>
+   944→                <CardContent>
+   945→                  <ResponsiveContainer width="100%" height={300}>
+   946→                    <AreaChart data={[
+   947→                      { year: 'Year 0', current: 104, smart: 104, cumulativeSaving: 0 },
+   948→                      { year: 'Year 1', current: 104, smart: 43, cumulativeSaving: 61 },
+   949→                      { year: 'Year 2', current: 104, smart: 43, cumulativeSaving: 122 },
+   950→                      { year: 'Year 3', current: 104, smart: 43, cumulativeSaving: 183 },
+   951→                      { year: 'Year 4', current: 104, smart: 43, cumulativeSaving: 244 },
+   952→                      { year: 'Year 5', current: 104, smart: 43, cumulativeSaving: 305 },
+   953→                    ]}>
+   954→                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+   955→                      <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+   956→                      <YAxis tick={{ fontSize: 10 }} label={{ value: '₹ Crores', angle: -90, position: 'insideLeft', style: { fontSize: 10 } }} />
+   957→                      <Tooltip />
+   958→                      <Area type="monotone" dataKey="current" stroke="#EF4444" fill="#EF4444" fillOpacity={0.1} name="Current Cost" />
+   959→                      <Area type="monotone" dataKey="smart" stroke={GREEN} fill={GREEN} fillOpacity={0.1} name="Smart System" />
+   960→                      <Line type="monotone" dataKey="cumulativeSaving" stroke="#8B5CF6" strokeWidth={2} strokeDasharray="5 5" name="Cumulative Savings" />
+   961→                      <Legend />
+   962→                    </AreaChart>
+   963→                  </ResponsiveContainer>
+   964→                </CardContent>
+   965→              </Card>
+   966→            </div>
+   967→
+   968→            {/* ROI Summary */}
+   969→            <Card className="border-0 shadow-md bg-gradient-to-r from-green-50 to-teal-50">
+   970→              <CardHeader>
+   971→                <CardTitle className="text-base flex items-center gap-2">
+   972→                  <TrendingDown className="w-5 h-5 text-green-600" />
+   973→                  Recommended Solution: Kevlar Blend + Full Smart System
+   974→                </CardTitle>
+   975→              </CardHeader>
+   976→              <CardContent>
+   977→                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+   978→                  <div>
+   979→                    <h4 className="text-sm font-semibold mb-2">Investment Required</h4>
+   980→                    <div className="space-y-1 text-xs">
+   981→                      <div className="flex justify-between"><span>Kevlar fabric (500 flags x 1.45x cost)</span><span className="font-semibold">₹31 Cr</span></div>
+   982→                      <div className="flex justify-between"><span>IoT sensors (5 per mast x 500)</span><span className="font-semibold">₹6.5 Cr</span></div>
+   983→                      <div className="flex justify-between"><span>AI/CV edge compute + cloud</span><span className="font-semibold">₹3.5 Cr</span></div>
+   984→                      <div className="flex justify-between"><span>Control room software + training</span><span className="font-semibold">₹2 Cr</span></div>
+   985→                      <div className="flex justify-between border-t pt-1 mt-1"><span className="font-semibold">Total Year 1</span><span className="font-bold text-green-700">₹43 Cr</span></div>
+   986→                    </div>
+   987→                  </div>
+   988→                  <div>
+   989→                    <h4 className="text-sm font-semibold mb-2">Annual Savings</h4>
+   990→                    <div className="space-y-1 text-xs">
+   991→                      <div className="flex justify-between"><span>Reduced replacements (4x → 1x)</span><span className="font-semibold text-green-600">₹61 Cr saved</span></div>
+   992→                      <div className="flex justify-between"><span>Automated inspections (IoT)</span><span className="font-semibold text-green-600">₹34 Cr saved</span></div>
+   993→                      <div className="flex justify-between"><span>Reduced washing (nano-coating)</span><span className="font-semibold text-green-600">₹8 Cr saved</span></div>
+   994→                      <div className="flex justify-between"><span>Recycling revenue</span><span className="font-semibold text-green-600">+₹2.5 Cr</span></div>
+   995→                      <div className="flex justify-between border-t pt-1 mt-1"><span className="font-semibold">Net Annual Saving</span><span className="font-bold text-green-700">₹61 Cr</span></div>
+   996→                    </div>
+   997→                  </div>
+   998→                  <div>
+   999→                    <h4 className="text-sm font-semibold mb-2">5-Year Impact</h4>
+  1000→                    <div className="space-y-3">
+  1001→                      <div className="p-3 rounded-xl bg-white/80">
+  1002→                        <div className="text-3xl font-bold text-green-700">₹305 Cr</div>
+  1003→                        <div className="text-xs text-gray-500">Cumulative Savings</div>
+  1004→                      </div>
+  1005→                      <div className="p-3 rounded-xl bg-white/80">
+  1006→                        <div className="text-3xl font-bold" style={{ color: SAFFRON }}>7.1x</div>
+  1007→                        <div className="text-xs text-gray-500">ROI on Investment</div>
+  1008→                      </div>
+  1009→                      <div className="p-3 rounded-xl bg-white/80">
+  1010→                        <div className="text-3xl font-bold text-blue-700">8.5 mo</div>
+  1011→                        <div className="text-xs text-gray-500">Payback Period</div>
+  1012→                      </div>
+  1013→                    </div>
+  1014→                  </div>
+  1015→                </div>
+  1016→              </CardContent>
+  1017→            </Card>
+  1018→          </TabsContent>
+  1019→        </Tabs>
+  1020→      </main>
+  1021→
+  1022→      {/* ─── Footer ─── */}
+  1023→      <footer className="mt-8 border-t border-gray-100 bg-white/60 backdrop-blur">
+  1024→        <div className="max-w-[1600px] mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2">
+  1025→          <div className="flex items-center gap-3">
+  1026→            <div className="flex h-0.5 w-8 rounded-full overflow-hidden">
+  1027→              <div className="flex-1" style={{ backgroundColor: SAFFRON }} />
+  1028→              <div className="flex-1 bg-gray-300" />
+  1029→              <div className="flex-1" style={{ backgroundColor: GREEN }} />
+  1030→            </div>
+  1031→            <span className="text-xs text-gray-400">Dhvani — Resilient Tricolour Project | India Innovates Initiative</span>
+  1032→          </div>
+  1033→          <div className="flex items-center gap-4 text-[10px] text-gray-400">
+  1034→            <span>500 Flags Monitored</span>
+  1035→            <span>|</span>
+  1036→            <span>8 Zones Covered</span>
+  1037→            <span>|</span>
+  1038→            <span>Real-time AI + IoT</span>
+  1039→          </div>
+  1040→        </div>
+  1041→      </footer>
+  1042→    </div>
+  1043→  );
+  1044→}
+  1045→
+  1046→// ─── KPI Card Component ───
+  1047→function KPICard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+  1048→  return (
+  1049→    <motion.div
+  1050→      initial={{ opacity: 0, y: 10 }}
+  1051→      animate={{ opacity: 1, y: 0 }}
+  1052→      className="bg-white rounded-xl p-4 shadow-md border-0"
+  1053→    >
+  1054→      <div className="flex items-center gap-2 mb-2">
+  1055→        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}15`, color }}>
+  1056→          {icon}
+  1057→        </div>
+  1058→        <span className="text-xs text-gray-400">{label}</span>
+  1059→      </div>
+  1060→      <div className="text-2xl font-bold" style={{ color }}>{value}</div>
+  1061→    </motion.div>
+  1062→  );
+  1063→}
+  1064→
